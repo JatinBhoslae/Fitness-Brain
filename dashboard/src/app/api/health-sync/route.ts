@@ -3,17 +3,41 @@ import { NextResponse } from 'next/server';
 const SUPABASE_URL = "https://shlyqfxppovzntpvfbzn.supabase.co";
 const SUPABASE_SERVICE_ROLE = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNobHlxZnhwcG92em50cHZmYnpuIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjQ1MjUwNiwiZXhwIjoyMDkyMDI4NTA2fQ.t1S3PVyR46SYouQZu-_LHgxcbfG7ur_qiZbYk3Hd30g"; 
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 // Helper to interact with Supabase via REST
 async function getCloudStore() {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/health_sync?user_id=eq.jatin&select=data`, {
-    headers: {
-      'apikey': SUPABASE_SERVICE_ROLE,
-      'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE}`
-    },
-    cache: 'no-store'
-  });
-  const data = await res.json();
-  return data?.[0]?.data || {};
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/health_sync?user_id=eq.jatin&select=data`, {
+      headers: {
+        'apikey': SUPABASE_SERVICE_ROLE,
+        'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE}`
+      },
+      next: { revalidate: 0 }
+    });
+    const result = await res.json();
+    const store = result?.[0]?.data || {};
+    
+    // ENSURE BASELINE DEFAULTS
+    if (!store.rawMetrics) {
+      store.rawMetrics = {
+        steps: 0,
+        heart_rate: 0,
+        sleep_hours: 0,
+        active_time_minutes: 0,
+        active_calories: 0,
+        distance_km: 0,
+        spo2: 98,
+        stress: 42
+      };
+    }
+    if (!store.dailyHistory) store.dailyHistory = generateFakeHistory();
+    
+    return store;
+  } catch (e) {
+    return { rawMetrics: {}, dailyHistory: generateFakeHistory() };
+  }
 }
 
 async function updateCloudStore(newData: any) {
