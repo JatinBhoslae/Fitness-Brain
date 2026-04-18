@@ -148,9 +148,17 @@ export async function GET() {
       .sort((a, b) => a.date.localeCompare(b.date))
       .slice(-15);
 
-    return NextResponse.json({
+    return new NextResponse(JSON.stringify({
       ...store,
       dailySteps: dailyStepsArray
+    }), {
+      status: 200,
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Content-Type': 'application/json',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      },
     });
   } catch (error) {
     return NextResponse.json({ error: 'Cloud Fetch Failed' }, { status: 500 });

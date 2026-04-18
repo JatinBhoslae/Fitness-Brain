@@ -29,7 +29,14 @@ export default function FitnessBrainDashboard() {
   // FETCH LOGIC
   const fetchData = async () => {
     try {
-      const res = await fetch('/api/health-sync');
+      // Add a timestamp to the URL to bypass browser cache completely
+      const res = await fetch(`/api/health-sync?t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
       const data = await res.json();
       setState(data);
     } catch (err) {
