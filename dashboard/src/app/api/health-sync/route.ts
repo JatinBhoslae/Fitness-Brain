@@ -74,6 +74,8 @@ function generateFakeHistory() {
 export async function POST(request: Request) {
   try {
     const rawData = await request.json();
+    console.log(">>> CLOUD SYNC RECEIVED:", JSON.stringify(rawData, null, 2));
+    
     const currentStore = await getCloudStore();
     
     // Maintain history memory
