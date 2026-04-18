@@ -29,18 +29,12 @@ export async function GET(request: Request) {
       status: "success",
       timestamp: new Date().toISOString(),
       user_id: "jatin",
-      vitals_report: {
-        medical_vitals: {
-          heart_rate: metrics.heart_rate || 0,
-          spo2: metrics.spo2 || 0,
-          stress: metrics.stress || 0
-        },
-        activity_context: {
-          steps: metrics.steps || 0,
-          sleep_hours: metrics.sleep_hours || 0,
-          active_calories: metrics.active_calories || 0
-        }
-      },
+      heart_rate: metrics.heart_rate || 0,
+      spo2: metrics.spo2 || 0,
+      stress: metrics.stress || 0,
+      steps: metrics.steps || 0,
+      sleep_hours: metrics.sleep_hours || 0,
+      active_calories: metrics.active_calories || 0,
       source: store.fastrackMetrics?.sources || "Google Fit Bridge"
     };
 
