@@ -81,7 +81,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
 
         try {
             val data = HealthSyncData(
-                userId = "123",
+                userId = "jatin",
                 heartRate = heartRate,
                 steps = steps,
                 sleepHours = sleepHours,
