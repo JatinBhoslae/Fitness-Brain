@@ -80,14 +80,14 @@ export async function POST(request: Request) {
     let dailyHistory = currentStore.dailyHistory || generateFakeHistory();
     
     const metrics = {
-      steps: rawData.steps || 0,
-      heart_rate: rawData.heartRate || 0,
-      sleep_hours: rawData.sleepHours || 0,
-      active_time_minutes: rawData.activeTimeMinutes || 0,
-      active_calories: rawData.activeCalories || 0.0,
-      distance_km: rawData.distanceKm || 0.0,
-      spo2: rawData.spo2 || 98,
-      stress: rawData.stress || 42,
+      steps: rawData.steps ?? 0,
+      heart_rate: rawData.heartRate ?? 0,
+      sleep_hours: rawData.sleepHours ?? 0,
+      active_time_minutes: rawData.activeTimeMinutes ?? 0,
+      active_calories: rawData.activeCalories ?? 0,
+      distance_km: rawData.distanceKm ?? 0,
+      spo2: rawData.spo2 ?? 98,
+      stress: rawData.stress ?? 42,
     };
 
     const today = new Date().toISOString().split('T')[0];
