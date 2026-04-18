@@ -1,93 +1,74 @@
 import { NextResponse } from 'next/server';
 
-let dailyHistory: Record<string, any> = {};
+const SUPABASE_URL = "https://shlyqfxppovzntpvfbzn.supabase.co";
+const SUPABASE_SERVICE_ROLE = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNobHlxZnhwcG92em50cHZmYnpuIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjQ1MjUwNiwiZXhwIjoyMDkyMDI4NTA2fQ.t1S3PVyR46SYouQZu-_LHgxcbfG7ur_qiZbYk3Hd30g"; 
+
+// Helper to interact with Supabase via REST
+async function getCloudStore() {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/health_sync?user_id=eq.jatin&select=data`, {
+    headers: {
+      'apikey': SUPABASE_SERVICE_ROLE,
+      'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE}`
+    },
+    cache: 'no-store'
+  });
+  const data = await res.json();
+  return data?.[0]?.data || {};
+}
+
+async function updateCloudStore(newData: any) {
+  await fetch(`${SUPABASE_URL}/rest/v1/health_sync?user_id=eq.jatin`, {
+    method: 'PATCH',
+    headers: {
+      'apikey': SUPABASE_SERVICE_ROLE,
+      'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=minimal'
+    },
+    body: JSON.stringify({ data: newData, updated_at: new Date().toISOString() })
+  });
+}
 
 function generateFakeHistory() {
   const history: Record<string, any> = {};
   const today = new Date();
-  
-  // Create 14 days of history, but STOP at yesterday.
-  // Today MUST be reserved for real phone data only.
   for (let i = 1; i <= 14; i++) {
     const d = new Date();
     d.setDate(today.getDate() - i);
     const dateStr = d.toISOString().split('T')[0];
-    
     history[dateStr] = {
       steps: Math.floor(Math.random() * 2000) + 1000,
       heartRate: Math.floor(Math.random() * 20) + 65,
       sleepHours: Math.floor(Math.random() * 3) + 5,
-      activeTime: Math.floor(Math.random() * 30) + 15,
-      calories: Math.floor(Math.random() * 100) + 50,
-      spo2: Math.floor(Math.random() * 3) + 96,
-      stress: Math.floor(Math.random() * 20) + 30,
-      breathe: 5
+      spo2: Math.floor(Math.random() * 2) + 97,
+      stress: Math.floor(Math.random() * 20) + 30
     };
   }
   return history;
 }
 
-// Initialize history
-dailyHistory = generateFakeHistory();
-
-let globalState: any = {
-  lastSync: null,
-  rawMetrics: {
-    steps: 0,
-    heart_rate: 0,
-    resting_heart_rate: 65,
-    sleep_hours: 0,
-    active_time_minutes: 0,
-    active_calories: 0.0,
-    total_calories: 0.0,
-    distance_km: 0.0,
-    spo2: 0,
-    stress: 42,
-    hydration_ml: 1200,
-    breathe_minutes: 0,
-    weather: { temp: 30, condition: 'Cloudy', location: 'Dashboard' }
-  },
-  analysis: null,
-  dailySteps: [],
-  fastrackMetrics: {
-    vitalityIndex: 0,
-    zPoints: 0,
-    sources: 'None'
-  }
-};
-
 export async function POST(request: Request) {
   try {
     const rawData = await request.json();
-    console.log("CRITICAL SYNC RECEIVED:", JSON.stringify(rawData));
-
+    const currentStore = await getCloudStore();
+    
+    // Maintain history memory
+    let dailyHistory = currentStore.dailyHistory || generateFakeHistory();
+    
     const metrics = {
       steps: rawData.steps || 0,
       heart_rate: rawData.heartRate || 0,
-      resting_heart_rate: 65,
       sleep_hours: rawData.sleepHours || 0,
       active_time_minutes: rawData.activeTimeMinutes || 0,
       active_calories: rawData.activeCalories || 0.0,
-      total_calories: rawData.totalCalories || 0.0,
       distance_km: rawData.distanceKm || 0.0,
-      spo2: rawData.spo2 || 0,
+      spo2: rawData.spo2 || 98,
       stress: rawData.stress || 42,
-      hydration_ml: 1200,
-      breathe_minutes: 5,
-      weather: { temp: 30, condition: 'Cloudy', location: 'Dashboard' },
-      hrv: 50,
-      soreness: 1,
-      energy_level: 7,
-      sleep_breakdown: {
-        deep: ((rawData.sleepHours || 0) * 0.25).toFixed(1),
-        light: ((rawData.sleepHours || 0) * 0.6).toFixed(1),
-        rem: ((rawData.sleepHours || 0) * 0.15).toFixed(1)
-      }
     };
 
     const today = new Date().toISOString().split('T')[0];
     
-    // MERGE PHONE HISTORY: If the phone sent a history list, save it!
+    // Merge phone history if available
     if (rawData.dailySteps && Array.isArray(rawData.dailySteps)) {
       rawData.dailySteps.forEach((item: any) => {
         dailyHistory[item.date] = {
@@ -95,64 +76,68 @@ export async function POST(request: Request) {
           heartRate: item.hr,
           sleepHours: item.sleep,
           spo2: item.spo2,
-          activeTime: item.active || 0,
           stress: item.stress || 42
         };
       });
     }
 
-    // FORCE UPDATE TODAY (highest priority)
+    // Force update today
     dailyHistory[today] = {
       steps: metrics.steps,
       heartRate: metrics.heart_rate,
       sleepHours: metrics.sleep_hours,
-      activeTime: metrics.active_time_minutes,
-      calories: metrics.active_calories,
       spo2: metrics.spo2,
-      stress: metrics.stress,
-      breathe: metrics.breathe_minutes
+      stress: metrics.stress
     };
 
-    // Recalculate vitality
-    const movementScore = Math.min(40, (metrics.steps / 8000) * 40);
-    const restScore = Math.min(30, (metrics.sleep_hours / 7.5) * 30);
-    const exertionScore = Math.min(30, (metrics.active_calories / 400) * 30);
-    const vitalityIndex = Math.round(movementScore + restScore + exertionScore);
-
-    globalState = {
+    const newStore = {
       lastSync: new Date().toISOString(),
       rawMetrics: metrics,
-      lastRawData: rawData,
-      dailySteps: Object.entries(dailyHistory)
-        .map(([date, data]: [string, any]) => ({
-          date,
-          steps: data.steps,
-          hr: data.heartRate,
-          spo2: data.spo2,
-          sleep: data.sleepHours,
-          active: data.activeTime
-        }))
-        .sort((a, b) => a.date.localeCompare(b.date))
-        .slice(-15),
+      dailyHistory: dailyHistory,
       fastrackMetrics: {
-        vitalityIndex: vitalityIndex,
-        zPoints: 10,
-        sources: rawData.dataSources || 'Unknown'
+        vitalityIndex: Math.round(Math.min(100, (metrics.steps/8000)*40 + (metrics.sleep_hours/7)*40 + 20)),
+        sources: rawData.dataSources || 'Google Fit'
       }
     };
 
+    await updateCloudStore(newStore);
     return NextResponse.json({ success: true });
   } catch (error) {
-    return NextResponse.json({ error: 'Sync failed' }, { status: 500 });
+    return NextResponse.json({ error: 'Cloud Sync Failed' }, { status: 500 });
   }
 }
 
 export async function GET() {
-  return NextResponse.json(globalState);
+  try {
+    const store = await getCloudStore();
+    
+    // Transform history object back to the array format the UI expects
+    const dailyStepsArray = Object.entries(store.dailyHistory || {})
+      .map(([date, data]: [string, any]) => ({
+        date,
+        steps: data.steps,
+        hr: data.heartRate,
+        sleep: data.sleepHours,
+        spo2: data.spo2,
+        stress: data.stress
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(-15);
+
+    return NextResponse.json({
+      ...store,
+      dailySteps: dailyStepsArray
+    });
+  } catch (error) {
+    return NextResponse.json({ error: 'Cloud Fetch Failed' }, { status: 500 });
+  }
 }
 
 export async function DELETE() {
-  globalState.rawMetrics.steps = 0;
-  dailyHistory = generateFakeHistory();
+  const resetStore = {
+    dailyHistory: generateFakeHistory(),
+    rawMetrics: { steps: 0, heart_rate: 0, sleep_hours: 0 }
+  };
+  await updateCloudStore(resetStore);
   return NextResponse.json({ success: true });
 }
